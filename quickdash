@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuickDASH Accessible Assessment</title>
+    <style>
+        :root {
+            --green: #26ad60;
+            --light-green: #a2d149;
+            --yellow: #f1c40f;
+            --orange: #e67e22;
+            --red: #e74c3c;
+            --blue: #3498db;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+        }
+
+        #app-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 500px;
+        }
+
+        h1 { color: #2c3e50; font-size: 1.8rem; margin-bottom: 1.5rem; }
+        p { font-size: 1.2rem; color: #7f8c8d; line-height: 1.5; }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-top: 2rem;
+        }
+
+        button {
+            padding: 20px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.1s, filter 0.2s;
+            color: white;
+        }
+
+        button:active { transform: scale(0.98); }
+        button:hover { filter: brightness(90%); }
+
+        /* Kahoot Colors */
+        .btn-start { background-color: var(--blue); width: 100%; }
+        .btn-1 { background-color: var(--green); }
+        .btn-2 { background-color: var(--light-green); }
+        .btn-3 { background-color: var(--yellow); color: black; }
+        .btn-4 { background-color: var(--orange); }
+        .btn-5 { background-color: var(--red); }
+        
+        .replay-btn {
+            background: none;
+            color: var(--blue);
+            font-size: 1rem;
+            text-decoration: underline;
+            margin-top: 1rem;
+        }
+
+        #progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #eee;
+            border-radius: 5px;
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+
+        #progress-fill {
+            height: 100%;
+            background: var(--blue);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <div id="progress-bar" class="hidden"><div id="progress-fill"></div></div>
+    
+    <div id="start-screen">
+        <h1>QuickDASH Assessment</h1>
+        <p>This tool will help evaluate your symptoms. Questions will be read aloud. Click the button below to start.</p>
+        <button class="btn-start" onclick="startAssessment()">START</button>
+    </div>
+
+    <div id="question-screen" class="hidden">
+        <h1 id="question-number">Question 1</h1>
+        <p id="question-text">Loading...</p>
+        
+        <div class="btn-grid">
+            <button class="btn-1" onclick="handleAnswer(1)">1. No Difficulty</button>
+            <button class="btn-2" onclick="handleAnswer(2)">2. Mild Difficulty</button>
+            <button class="btn-3" onclick="handleAnswer(3)">3. Moderate Difficulty</button>
+            <button class="btn-4" onclick="handleAnswer(4)">4. Severe Difficulty</button>
+            <button class="btn-5" onclick="handleAnswer(5)">5. Unable</button>
+        </div>
+        <button class="replay-btn" onclick="speakCurrent()">🔊 Hear Question Again</button>
+    </div>
+
+    <div id="result-screen" class="hidden">
+        <h1>Assessment Complete</h1>
+        <p>Your QuickDASH Score is:</p>
+        <h2 id="final-score" style="font-size: 3rem; color: var(--blue);">--</h2>
+        <p style="font-size: 0.9rem;">(Score range 0-100; higher is more severe)</p>
+        <button class="btn-start" onclick="location.reload()" style="margin-top: 2rem;">Restart</button>
+    </div>
+</div>
+
+<script>
+    const questions = [
+        "Open a tight or new jar.",
+        "Do heavy household chores, like washing walls or floors.",
+        "Carry a shopping bag or briefcase.",
+        "Wash your back.",
+        "Use a knife to cut food.",
+        "Recreational activities in which you take some force or impact through your arm, shoulder or hand.",
+        "During the past week, to what extent has your arm, shoulder or hand problem interfered with your normal social activities?",
+        "During the past week, were you limited in your work or other regular daily activities?",
+        "Arm, shoulder or hand pain.",
+        "Tingling, or pins and needles, in your arm, shoulder or hand.",
+        "During the past week, how much difficulty have you had sleeping because of pain in your arm, shoulder or hand?"
+    ];
+
+    let currentStep = 0;
+    let totalScore = 0;
+
+    function speak(text) {
+        window.speechSynthesis.cancel(); // Stop any current speech
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.rate = 0.9; 
+        window.speechSynthesis.speak(msg);
+    }
+
+    function startAssessment() {
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('question-screen').classList.remove('hidden');
+        document.getElementById('progress-bar').classList.remove('hidden');
+        loadQuestion();
+    }
+
+    function loadQuestion() {
+        const q = questions[currentStep];
+        document.getElementById('question-number').innerText = `Question ${currentStep + 1} of 11`;
+        document.getElementById('question-text').innerText = q;
+        document.getElementById('progress-fill').style.width = `${((currentStep + 1) / 11) * 100}%`;
+        speakCurrent();
+    }
+
+    function speakCurrent() {
+        const q = questions[currentStep];
+        // Custom prompts for social/pain questions to ensure clarity
+        if (currentStep === 6) {
+            speak("To what extent has your problem interfered with social activities? 1 is not at all, 5 is extremely.");
+        } else if (currentStep >= 8) {
+            speak(`Rate the severity of your ${q}. 1 is none, 5 is extreme.`);
+        } else {
+            speak(`Please rate your difficulty to: ${q}. 1 is no difficulty, 5 is unable.`);
+        }
+    }
+
+    function handleAnswer(points) {
+        totalScore += points;
+        currentStep++;
+
+        if (currentStep < questions.length) {
+            loadQuestion();
+        } else {
+            showResults();
+        }
+    }
+
+    function showResults() {
+        document.getElementById('question-screen').classList.add('hidden');
+        document.getElementById('result-screen').classList.remove('hidden');
+        
+        // QuickDASH Formula: [(sum of n responses / n) - 1] * 25
+        const finalCalculatedScore = ((totalScore / 11) - 1) * 25;
+        document.getElementById('final-score').innerText = finalCalculatedScore.toFixed(1);
+        
+        speak(`Assessment complete. Your score is ${finalCalculatedScore.toFixed(1)}.`);
+    }
+</script>
+
+</body>
+</html>
